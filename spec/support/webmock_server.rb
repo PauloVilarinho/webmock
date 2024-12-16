@@ -1,14 +1,25 @@
-require 'webrick'
 require 'logger'
 require 'singleton'
+require 'falcon'
+require 'protocol/http'
+
+module MockedApp
+  def self.call(env)
+    Protocol::HTTP::Response.new(
+      "http/1.1",
+      200,
+      Protocol::HTTP::Body::Buffered.wrap("hello world")
+    )
+  end
+end
 
 class WebMockServer
   include Singleton
 
-  attr_reader :port, :started
+  attr_reader :started
 
   def host_with_port
-    "localhost:#{port}"
+    "localhost:3000"
   end
 
   def concurrent
@@ -23,42 +34,19 @@ class WebMockServer
 
   def start
     @started = true
-    server = WEBrick::GenericServer.new(Port: 0, Logger: Logger.new("/dev/null"))
-    server.logger.level = 0
-    @port = server.config[:Port]
+    mocked_app_endpoint = Async::HTTP::Endpoint.parse("http://#{host_with_port}")
+    app = Falcon::Server.middleware(MockedApp)
+    server = Falcon::Server.new(app, mocked_app_endpoint)
 
     concurrent do
       ['TERM', 'INT'].each do |signal|
         trap(signal) do
           Thread.new do
-            server.shutdown
+            server.close
           end
         end
       end
-      server.start do |socket|
-        socket.read(1)
-        socket.puts <<-EOT.gsub(/^\s+\|/, '')
-          |HTTP/1.1 200 OK\r
-          |Date: Fri, 31 Dec 1999 23:59:59 GMT\r
-          |Content-Type: text/html\r
-          |Content-Length: 11\r
-          |Set-Cookie: bar\r
-          |Set-Cookie: foo\r
-          |\r
-          |hello world
-        EOT
-      end
-    end
-
-
-    loop do
-      begin
-        TCPSocket.new("localhost", port)
-        sleep 0.1
-        break
-      rescue Errno::ECONNREFUSED
-        sleep 0.1
-      end
+      server.run.wait
     end
   end
 
