@@ -8,6 +8,13 @@ module MockedApp
     Protocol::HTTP::Response.new(
       "http/1.1",
       200,
+      Protocol::HTTP::Headers::Multiple[
+        ["Date", "Fri, 31 Dec 1999 23:59:59 GMT"],
+        ["Content-Type", "text/html"],
+        ["Content-Length", "11"],
+        ["Set-Cookie", "bar"],
+        ["Set-Cookie", "foo"]
+      ],
       Protocol::HTTP::Body::Buffered.wrap("hello world")
     )
   end
