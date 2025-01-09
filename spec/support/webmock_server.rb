@@ -6,7 +6,7 @@ require 'protocol/http'
 module MockedApp
   def self.call(env)
     Protocol::HTTP::Response.new(
-      "http/1.1",
+      "http/1.1", # TODO -> http
       200,
       Protocol::HTTP::Headers::Multiple[
         ["Date", "Fri, 31 Dec 1999 23:59:59 GMT"],
@@ -23,10 +23,10 @@ end
 class WebMockServer
   include Singleton
 
-  attr_reader :started
+  attr_reader :started, :port
 
   def host_with_port
-    "localhost:3000"
+    "localhost:#{@port}"
   end
 
   def concurrent
@@ -40,6 +40,7 @@ class WebMockServer
   end
 
   def start
+    @port = 3000
     @started = true
     mocked_app_endpoint = Async::HTTP::Endpoint.parse("http://#{host_with_port}")
     app = Falcon::Server.middleware(MockedApp)
@@ -49,7 +50,9 @@ class WebMockServer
       ['TERM', 'INT'].each do |signal|
         trap(signal) do
           Thread.new do
-            server.close
+            # Todo check if process is correctly stopped
+            stop
+            exit
           end
         end
       end
